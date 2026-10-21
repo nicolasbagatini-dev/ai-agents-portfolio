@@ -11,7 +11,7 @@ Client names and private data are omitted. Numbers are the ones measured in prod
 
 | # | Case | What it shows | Stack |
 | --- | --- | --- | --- |
-| 1 | [Cheap-model extraction with mechanical evals](cases/01-llm-extraction-evals.md) | Eval design against a gold set, cost per item, measured false positive / false negative | Claude Code headless (Haiku), Python |
+| 1 | [Cheap-model extraction with mechanical evals](cases/01-llm-extraction-evals.md) · [live demo](https://ai.nicolasbagatini.dev/demos/eval/) | Eval design against a gold set, cost per item, measured false positive / false negative | Claude Code headless (Haiku), Python |
 | 2 | [WhatsApp sales agent in production](cases/02-whatsapp-sales-agent.md) · [live demo](https://ai.nicolasbagatini.dev/demos/agent/) | Tool-using agent, prompt-injection defense, latency tuning | n8n, Claude Sonnet, LangChain, Postgres, Redis |
 | 3 | [Red-team gate for conversational agents](cases/03-red-team-gate.md) | Adversarial prompt battery that blocks go-live | Prompt suites, simulated attacker model |
 | 4 | [Claude Code as an engineering OS](cases/04-claude-code-ops.md) | Hooks, skills, subagents, usage telemetry | Claude Code hooks, Bash, Python, React, Supabase |

@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Literal Extraction Check</title>
+<meta name="description" content="The anti-hallucination check from case 1, running in the browser: every extracted value must be a literal slice of the input, and the slices must rebuild the whole text.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Rubik:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
+<link rel="stylesheet" href="../shared.css">
+<style>
+  :root{
+    --bg:#050505;--panel:#111;--panel-2:#181818;--panel-3:#202020;
+    --line:rgba(255,255,255,.08);--line-2:rgba(255,255,255,.14);
+    --ink:#F7F7F7;--dim:#8C8C8C;--dimmer:#5A5A5A;
+    --ok:#8FE3B0;--ok-soft:rgba(143,227,176,.12);
+    --warn:#E3C98F;--warn-soft:rgba(227,201,143,.14);
+    --bad:#E39A8F;--bad-soft:rgba(227,154,143,.16);
+    --r:24px;--r-s:12px;--ease:cubic-bezier(0.23,1,0.32,1);
+    --head:"Unbounded",system-ui,sans-serif;
+    --body:"Rubik",system-ui,-apple-system,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--body);-webkit-font-smoothing:antialiased}
+  a{color:var(--ok)}
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 16px 64px}
+  header h1{font:700 clamp(26px,3.6vw,44px)/1.05 var(--head);letter-spacing:-.03em;margin:0}
+  header p{color:var(--dim);max-width:46em;margin:14px 0 0;font-size:clamp(16px,1.6vw,19px);line-height:1.4}
+  header p b{color:var(--ink);font-weight:500}
+  .tag{display:inline-flex;align-items:center;gap:6px;font:500 12px var(--mono);color:var(--ok);background:var(--ok-soft);border-radius:999px;padding:5px 10px;margin-bottom:16px}
+
+  .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:28px 0 18px;align-items:center}
+  .tab{font:500 14px var(--body);color:var(--dim);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:color .2s,background .2s,border-color .2s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{color:var(--bg);background:var(--ok);border-color:var(--ok)}
+  .verdict{margin-left:auto;font:500 14px var(--mono);border-radius:999px;padding:8px 14px;display:inline-flex;align-items:center;gap:8px}
+  .verdict.pass{color:var(--ok);background:var(--ok-soft)}
+  .verdict.fail{color:var(--bad);background:var(--bad-soft)}
+
+  .grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px}
+  @media (max-width:860px){.grid{grid-template-columns:1fr}.verdict{margin-left:0}}
+  .card{background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+  .card-top{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--panel-2);font:500 13px var(--mono);color:var(--dim)}
+  .card-body{padding:18px 16px}
+
+  .doc{font-size:16px;line-height:2.1}
+  .seg{border-radius:6px;padding:3px 2px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+  .seg.ok{background:var(--ok-soft);box-shadow:inset 0 -2px 0 rgba(143,227,176,.45)}
+  .seg.drop{background:var(--bad-soft);color:var(--bad);text-decoration:line-through;text-decoration-color:rgba(227,154,143,.6)}
+  .seg sup{font:500 10px var(--mono);color:var(--ok);margin-left:3px;vertical-align:4px}
+  .seg.drop sup{color:var(--bad)}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:16px;font-size:13px;color:var(--dim)}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+  .errs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font:13px/1.45 var(--mono)}
+  .errs li{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:9px 10px;border-radius:var(--r-s);background:var(--bad-soft);border:1px solid rgba(227,154,143,.25);word-break:break-word}
+  .errs li iconify-icon{color:var(--bad);font-size:17px;margin-top:1px}
+  .errs li.pass{background:var(--ok-soft);border-color:rgba(143,227,176,.25)}
+  .errs li.pass iconify-icon{color:var(--ok)}
+  .rules{margin:18px 0 0;padding:0 0 0 18px;color:var(--dim);font-size:14px}
+  .rules li{margin:4px 0}
+
+  details{margin-top:18px;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r)}
+  summary{cursor:pointer;padding:14px 16px;font:500 14px var(--body);color:var(--ink);display:flex;align-items:center;gap:8px;list-style:none}
+  summary::-webkit-details-marker{display:none}
+  .edit{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 16px}
+  @media (max-width:860px){.edit{grid-template-columns:1fr}}
+  .edit label{font:500 12px var(--mono);color:var(--dim);display:block;margin-bottom:6px}
+  textarea{width:100%;min-height:260px;background:var(--panel-2);color:var(--ink);border:1px solid var(--line-2);border-radius:var(--r-s);padding:12px;font:13px/1.5 var(--mono);resize:vertical}
+  textarea:focus{outline:2px solid var(--ok);outline-offset:1px}
+  .run{grid-column:1/-1;justify-self:start;font:500 15px var(--body);background:var(--ok);color:var(--bg);border:0;border-radius:999px;padding:11px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+  .run:active{transform:scale(.97)}
+
+  .caption{margin-top:18px;color:var(--dim);font-size:15px;max-width:62em}
+  .caption b{color:var(--ink);font-weight:500}
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);color:var(--dimmer);font-size:13px;display:flex;flex-wrap:wrap;gap:8px 20px}
+  footer a{color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag"><iconify-icon icon="ph:check-square-offset"></iconify-icon> <span data-i18n="tag">runs in your browser · no model call</span></span>
+    <h1 data-i18n="h1">Is the model inventing text? Check it without a model.</h1>
+    <p data-i18n="lead">The lock from <a href="https://github.com/nicolasbagatini-dev/ai-agents-portfolio/blob/main/cases/01-llm-extraction-evals.md">case 1</a>, ported from <a href="https://github.com/nicolasbagatini-dev/ai-agents-portfolio/blob/main/code/evals/verify_literal.py">verify_literal.py</a>. Every extracted value must be <b>a literal slice of the input</b>, and the slices joined in order must <b>rebuild the whole text</b>. A cheap model can then be trusted where it passes and rejected where it does not.</p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-p="strong"><iconify-icon icon="ph:seal-check"></iconify-icon> <span data-i18n="tab_strong">Strong model output</span></button>
+    <button class="tab" role="tab" data-p="cheap"><iconify-icon icon="ph:warning"></iconify-icon> <span data-i18n="tab_cheap">Cheap model output</span></button>
+    <span class="verdict" id="verdict"></span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-top"><iconify-icon icon="ph:file-text"></iconify-icon> <span data-i18n="doc_title">input text, as covered by the extraction</span></div>
+      <div class="card-body">
+        <div class="doc" id="doc"></div>
+        <div class="legend">
+          <span><i style="background:var(--ok-soft);box-shadow:inset 0 -2px 0 var(--ok)"></i><span data-i18n="leg_ok">covered by a literal slice (label on top)</span></span>
+          <span><i style="background:var(--bad-soft)"></i><span data-i18n="leg_drop">dropped: no slice reproduces it</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-top"><iconify-icon icon="ph:list-checks"></iconify-icon> verify(original, output)</div>
+      <div class="card-body">
+        <ul class="errs" id="errs"></ul>
+        <ol class="rules" data-i18n="rules">
+          <li>every slice is a literal substring of the original, in order</li>
+          <li>slices joined in order rebuild the whole original</li>
+          <li>every mark is a literal substring of its own slice</li>
+          <li>every label belongs to the allowed list</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <p class="caption" id="caption"></p>
+
+  <details id="editor">
+    <summary><iconify-icon icon="ph:pencil-simple"></iconify-icon> <span data-i18n="edit">Edit the text or the JSON and run the check yourself</span></summary>
+    <div class="edit">
+      <div><label for="in-text">original.txt</label><textarea id="in-text" spellcheck="false"></textarea></div>
+      <div><label for="in-json">output.json</label><textarea id="in-json" spellcheck="false"></textarea></div>
+      <button class="run" id="run"><iconify-icon icon="ph:play"></iconify-icon> <span data-i18n="run">Run verify</span></button>
+    </div>
+  </details>
+
+  <footer>
+    <span>Nícolas Bagatini · <a href="https://nicolasbagatini.dev">nicolasbagatini.dev</a></span>
+    <span data-i18n="foot_prod">In production: Claude Code headless (Haiku) on 8,251 postings, measured regex error 1.7% FP / 2% FN</span>
+    <span data-i18n="foot_note">The posting above is fictional. The check is the same logic as the Python script.</span>
+  </footer>
+</div>
+
+<script>
+window.I18N = {
+  en: {},
+  pt: {
+    _title: 'Verificação de extração literal',
+    tag: 'roda no seu navegador · sem chamar modelo',
+    h1: 'O modelo está inventando texto? Confira sem usar modelo.',
+    lead: 'A trava do <a href="https://github.com/nicolasbagatini-dev/ai-agents-portfolio/blob/main/cases/01-llm-extraction-evals.md">caso 1</a>, portada do <a href="https://github.com/nicolasbagatini-dev/ai-agents-portfolio/blob/main/code/evals/verify_literal.py">verify_literal.py</a>. Todo valor extraído precisa ser <b>um trecho literal da entrada</b>, e os trechos juntados em ordem precisam <b>remontar o texto inteiro</b>. Assim dá para confiar no modelo barato onde ele passa e rejeitar onde ele falha.',
+    tab_strong: 'Saída do modelo forte',
+    tab_cheap: 'Saída do modelo barato',
+    doc_title: 'texto de entrada, como a extração cobriu',
+    leg_ok: 'coberto por um trecho literal (rótulo em cima)',
+    leg_drop: 'perdido: nenhum trecho reproduz isso',
+    rules: '<li>todo trecho é uma substring literal do original, em ordem</li><li>os trechos juntados em ordem remontam o original inteiro</li><li>toda marca é uma substring literal do próprio trecho</li><li>todo rótulo pertence à lista permitida</li>',
+    edit: 'Edite o texto ou o JSON e rode a verificação você mesmo',
+    run: 'Rodar verify',
+    foot_prod: 'Em produção: Claude Code headless (Haiku) em 8.251 vagas, erro medido do regex 1,7% FP / 2% FN',
+    foot_note: 'A vaga acima é fictícia. A verificação é a mesma lógica do script Python.',
+  }
+};
+// verify() messages; English matches the Python script line for line
+const MSG = {
+  en: {
+    label: (i, l) => `slice ${i}: unknown label '${l}'`,
+    literal: (i, t) => `slice ${i}: not literal or out of order: ${t}`,
+    dropped: (i, t) => `slice ${i}: text dropped before it: ${t}`,
+    mark: (i, j, t) => `slice ${i} mark ${j}: not inside its slice: ${t}`,
+    markLabel: (i, j, l) => `slice ${i} mark ${j}: unknown label '${l}'`,
+    end: t => `text dropped at the end: ${t}`,
+    pass: 'no errors: literal, complete, labels valid', dropTag: 'dropped',
+    fail: n => `FAIL (${n} errors)`, shape: m => `output.json is not in the expected shape: ${m}`,
+    json: m => `invalid JSON: ${m}`, yours: '<b>Your input.</b> Same four rules, run on what you typed.',
+  },
+  pt: {
+    label: (i, l) => `trecho ${i}: rótulo desconhecido '${l}'`,
+    literal: (i, t) => `trecho ${i}: não é literal ou está fora de ordem: ${t}`,
+    dropped: (i, t) => `trecho ${i}: texto perdido antes dele: ${t}`,
+    mark: (i, j, t) => `trecho ${i} marca ${j}: não está dentro do trecho: ${t}`,
+    markLabel: (i, j, l) => `trecho ${i} marca ${j}: rótulo desconhecido '${l}'`,
+    end: t => `texto perdido no final: ${t}`,
+    pass: 'nenhum erro: literal, completo, rótulos válidos', dropTag: 'perdido',
+    fail: n => `FAIL (${n} erros)`, shape: m => `output.json não está no formato esperado: ${m}`,
+    json: m => `JSON inválido: ${m}`, yours: '<b>A sua entrada.</b> As mesmas quatro regras, rodando sobre o que você digitou.',
+  }
+};
+const M = () => MSG[window.Demo?.state.lang] || MSG.en;
+</script>
+<script src="../shared.js"></script>
+<script>
+// same rules as code/evals/verify_literal.py
+const LABELS = new Set(["company","context","responsibilities","hard_skills","experience","team","contract","salary","tools","rest"]);
+const norm = s => s.replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/\s+/g,' ').trim();
+const normLabel = s => s.normalize('NFKD').replace(/[^\x00-\x7f]/g,'').toLowerCase().trim();
+const short = s => JSON.stringify(s.slice(0,60));
+
+function verify(original, output){
+  const errors = [], segs = [];
+  const orig = norm(original);
+  let pos = 0;
+  output.slices.forEach((sl, i) => {
+    const label = normLabel(sl.label || ''), text = norm(sl.text || '');
+    if (!LABELS.has(label)) errors.push(M().label(i, sl.label));
+    const found = orig.indexOf(text, pos);
+    if (!text || found === -1) { errors.push(M().literal(i, short(text))); return; }
+    if (orig.slice(pos, found).trim()) {
+      errors.push(M().dropped(i, short(orig.slice(pos, found).trim())));
+      segs.push({kind:'drop', text: orig.slice(pos, found)});
+    } else if (found > pos) segs.push({kind:'gap', text: orig.slice(pos, found)});
+    segs.push({kind:'ok', text, label});
+    pos = found + text.length;
+    (sl.marks || []).forEach((m, j) => {
+      if (!text.includes(norm(m.text || ''))) errors.push(M().mark(i, j, short(m.text || '')));
+      if (!LABELS.has(normLabel(m.label || ''))) errors.push(M().markLabel(i, j, m.label));
+    });
+  });
+  if (orig.slice(pos).trim()) {
+    errors.push(M().end(short(orig.slice(pos).trim())));
+    segs.push({kind:'drop', text: orig.slice(pos)});
+  }
+  return {errors, segs};
+}
+
+const TEXT = `Northwind Facilities is a commercial cleaning company with 40 sites in southern Brazil. We are growing the operations team and moving scheduling to automated tools.
+
+You will plan weekly routes for evening crews, track service quality and report missed visits.
+
+Requirements: 3 to 5 years in field operations, advanced spreadsheets and basic SQL. You will work with Airtable, n8n and Google Sheets.
+
+Contract: full-time, PJ. Apply by sending your resume.`;
+
+const TEXT_PT = `A Northwind Facilities é uma empresa de limpeza comercial com 40 unidades no Sul do Brasil. Estamos ampliando o time de operações e levando a escala para ferramentas automáticas.
+
+Você vai planejar as rotas semanais das equipes noturnas, acompanhar a qualidade do serviço e reportar visitas perdidas.
+
+Requisitos: 3 a 5 anos em operações de campo, planilhas avançadas e SQL básico. Você vai trabalhar com Airtable, n8n e Google Sheets.
+
+Contrato: tempo integral, PJ. Candidate-se enviando seu currículo.`;
+
+// same failures as the English presets, so both languages give the same verdicts
+const PRESETS_PT = {
+  strong: {
+    caption: '<b>O que observar:</b> cada frase é coberta uma vez, em ordem, palavra por palavra. O dado fino ("3 a 5 anos", "PJ") fica como marca dentro de um trecho maior, e a frase final cai em <code>rest</code> em vez de ser forçada num campo.',
+    output: {slices: [
+      {label:"company", text:"A Northwind Facilities é uma empresa de limpeza comercial com 40 unidades no Sul do Brasil."},
+      {label:"context", text:"Estamos ampliando o time de operações e levando a escala para ferramentas automáticas."},
+      {label:"responsibilities", text:"Você vai planejar as rotas semanais das equipes noturnas, acompanhar a qualidade do serviço e reportar visitas perdidas."},
+      {label:"hard_skills", text:"Requisitos: 3 a 5 anos em operações de campo, planilhas avançadas e SQL básico.",
+        marks:[{label:"experience", text:"3 a 5 anos"},{label:"hard_skills", text:"planilhas avançadas"},{label:"hard_skills", text:"SQL básico"}]},
+      {label:"tools", text:"Você vai trabalhar com Airtable, n8n e Google Sheets.",
+        marks:[{label:"tools", text:"Airtable"},{label:"tools", text:"n8n"},{label:"tools", text:"Google Sheets"}]},
+      {label:"contract", text:"Contrato: tempo integral, PJ.", marks:[{label:"contract", text:"PJ"}]},
+      {label:"rest", text:"Candidate-se enviando seu currículo."}
+    ]}
+  },
+  cheap: {
+    caption: '<b>O que observar:</b> ele reescreveu uma frase com as próprias palavras e preencheu um campo vazio (salário) do nada, duas falhas registradas no caso 1. Também parafraseou uma marca, usou um rótulo fora da lista e pulou a frase final. Nada disso precisa de modelo para ser pego: a verificação é comparação de texto simples.',
+    output: {slices: [
+      {label:"company", text:"A Northwind Facilities é uma empresa de limpeza comercial com 40 unidades no Sul do Brasil."},
+      {label:"context", text:"Estamos ampliando o time de operações e levando a escala para ferramentas automáticas."},
+      {label:"responsibilities", text:"Planeja rotas das equipes noturnas e acompanha a qualidade."},
+      {label:"hard_skills", text:"Requisitos: 3 a 5 anos em operações de campo, planilhas avançadas e SQL básico.",
+        marks:[{label:"experience", text:"cinco anos"},{label:"hard_skills", text:"SQL básico"}]},
+      {label:"tools", text:"Você vai trabalhar com Airtable, n8n e Google Sheets.", marks:[{label:"software", text:"Airtable"}]},
+      {label:"salary", text:"Salário: a combinar."},
+      {label:"contract", text:"Contrato: tempo integral, PJ."}
+    ]}
+  }
+};
+const pt = () => window.Demo?.state.lang === 'pt';
+const getText = () => pt() ? TEXT_PT : TEXT;
+const getPreset = name => (pt() ? PRESETS_PT : PRESETS)[name];
+
+const PRESETS = {
+  strong: {
+    caption: '<b>What to look at:</b> every sentence is covered once, in order, word for word. The fine data ("3 to 5 years", "PJ") sits as marks inside a coarse slice, and the closing line falls into <code>rest</code> instead of being forced into a field.',
+    output: {slices: [
+      {label:"company", text:"Northwind Facilities is a commercial cleaning company with 40 sites in southern Brazil."},
+      {label:"context", text:"We are growing the operations team and moving scheduling to automated tools."},
+      {label:"responsibilities", text:"You will plan weekly routes for evening crews, track service quality and report missed visits."},
+      {label:"hard_skills", text:"Requirements: 3 to 5 years in field operations, advanced spreadsheets and basic SQL.",
+        marks:[{label:"experience", text:"3 to 5 years"},{label:"hard_skills", text:"advanced spreadsheets"},{label:"hard_skills", text:"basic SQL"}]},
+      {label:"tools", text:"You will work with Airtable, n8n and Google Sheets.",
+        marks:[{label:"tools", text:"Airtable"},{label:"tools", text:"n8n"},{label:"tools", text:"Google Sheets"}]},
+      {label:"contract", text:"Contract: full-time, PJ.", marks:[{label:"contract", text:"PJ"}]},
+      {label:"rest", text:"Apply by sending your resume."}
+    ]}
+  },
+  cheap: {
+    caption: '<b>What to look at:</b> it rewrote a sentence in its own words and filled an empty field (salary) from nowhere, two failure modes logged in case 1. It also paraphrased a mark, used a label outside the list and skipped the closing line. No model is needed to catch any of it: the check is plain string matching.',
+    output: {slices: [
+      {label:"company", text:"Northwind Facilities is a commercial cleaning company with 40 sites in southern Brazil."},
+      {label:"context", text:"We are growing the operations team and moving scheduling to automated tools."},
+      {label:"responsibilities", text:"Plans routes for the evening crews and tracks quality."},
+      {label:"hard_skills", text:"Requirements: 3 to 5 years in field operations, advanced spreadsheets and basic SQL.",
+        marks:[{label:"experience", text:"five years"},{label:"hard_skills", text:"basic SQL"}]},
+      {label:"tools", text:"You will work with Airtable, n8n and Google Sheets.", marks:[{label:"software", text:"Airtable"}]},
+      {label:"salary", text:"Salary: competitive."},
+      {label:"contract", text:"Contract: full-time, PJ."}
+    ]}
+  }
+};
+
+const doc = document.getElementById('doc'), errsEl = document.getElementById('errs');
+const verdict = document.getElementById('verdict'), caption = document.getElementById('caption');
+const inText = document.getElementById('in-text'), inJson = document.getElementById('in-json');
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function show(original, output){
+  let res;
+  try { res = verify(original, output); }
+  catch (e) { res = {errors:[M().shape(e.message)], segs:[{kind:'drop', text: norm(original)}]}; }
+  doc.innerHTML = res.segs.map(s =>
+    s.kind === 'gap' ? esc(s.text) :
+    `<span class="seg ${s.kind}">${esc(s.text)}<sup>${s.kind === 'ok' ? esc(s.label) : M().dropTag}</sup></span>`).join('');
+  const pass = !res.errors.length;
+  errsEl.innerHTML = pass
+    ? `<li class="pass"><iconify-icon icon="ph:check-circle"></iconify-icon><span>${M().pass}</span></li>`
+    : res.errors.map(e => `<li><iconify-icon icon="ph:x-circle"></iconify-icon><span>${esc(e)}</span></li>`).join('');
+  verdict.className = 'verdict ' + (pass ? 'pass' : 'fail');
+  verdict.innerHTML = pass ? '<iconify-icon icon="ph:check-circle"></iconify-icon> PASS'
+                           : `<iconify-icon icon="ph:x-circle"></iconify-icon> ${M().fail(res.errors.length)}`;
+}
+
+let preset = null; // null while the visitor runs their own input
+
+function load(name){
+  preset = name;
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.p === name));
+  caption.innerHTML = getPreset(name).caption;
+  inText.value = getText();
+  inJson.value = JSON.stringify(getPreset(name).output, null, 2);
+  show(getText(), getPreset(name).output);
+}
+
+function runCustom(){
+  preset = null;
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', false));
+  caption.innerHTML = M().yours;
+  let out;
+  try { out = JSON.parse(inJson.value); }
+  catch (e) { errsEl.innerHTML = `<li><iconify-icon icon="ph:x-circle"></iconify-icon><span>${esc(M().json(e.message))}</span></li>`; verdict.className = 'verdict fail'; verdict.textContent = 'FAIL'; return; }
+  show(inText.value, out);
+}
+
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => load(t.dataset.p)));
+document.getElementById('run').addEventListener('click', runCustom);
+// a preset switches to its translated version; the visitor's own input stays and only the messages change
+Demo.onChange(() => preset ? load(preset) : runCustom());
+load(location.hash.slice(1) in PRESETS ? location.hash.slice(1) : 'cheap');
+</script>
+</body>
+</html>
